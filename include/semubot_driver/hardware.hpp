@@ -22,6 +22,7 @@ public:
     void disconnect();
     bool is_connected();
     void send_cmd(float vx, float vy, float omega);
+    void send_cmd_motors(float v1, float v2, float v3);
     bool get_state(StatePacket &state);
 
 private:

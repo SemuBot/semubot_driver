@@ -24,6 +24,7 @@ ament_target_dependencies(driver_node
   rclcpp
   geometry_msgs
   sensor_msgs
+  std_msgs
 )
 
 install(TARGETS driver_node

@@ -89,4 +89,18 @@ bool Hardware::get_state(StatePacket &state)
     return false;
 }
 
+
+void Hardware::send_cmd_motors(float v1, float v2, float v3)
+{
+    if (fd_ < 0) {
+        RCLCPP_WARN(node_->get_logger(), "Serial not open!");
+        return;
+    }
+    char buf[64];
+    int len = snprintf(buf, sizeof(buf), "CMD:%.4f,%.4f,%.4f\n", v1, v2, v3);
+    int written = write(fd_, buf, len);
+    RCLCPP_INFO(node_->get_logger(), "Sent: %s (%d bytes)", buf, written);
+}
+
+
 }  // namespace semubot
