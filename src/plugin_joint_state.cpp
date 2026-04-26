@@ -16,17 +16,19 @@ void PluginJointState::on_state_received(const StatePacket &state)
 {
     auto msg = sensor_msgs::msg::JointState();
     msg.header.stamp = node_->get_clock()->now();
-    msg.name = {"motor1_joint", "motor2_joint", "motor3_joint"};
+    msg.name = {"omni_ball_3_joint",
+        "omni_ball_1_joint",
+        "omni_ball_2_joint"};
 
     msg.position = {
-        static_cast<double>(state.deg[0]),
-        static_cast<double>(state.deg[1]),
-        static_cast<double>(state.deg[2])
+        static_cast<double>(state.deg[2]), // Motor 3
+        static_cast<double>(state.deg[0]), // Motor 1
+        static_cast<double>(state.deg[1])  // Motor 2
     };
     msg.velocity = {
-        static_cast<double>(state.vel[0]),
-        static_cast<double>(state.vel[1]),
-        static_cast<double>(state.vel[2])
+        static_cast<double>(state.vel[2]), // M3
+        static_cast<double>(state.vel[0]), // M1
+        static_cast<double>(state.vel[1])  // M2
     };
     msg.effort = {0.0, 0.0, 0.0};
 

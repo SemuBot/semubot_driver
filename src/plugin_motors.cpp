@@ -36,9 +36,9 @@ void PluginMotors::cmd_ros2control_callback(const std_msgs::msg::Float32MultiArr
         msg->data[0], msg->data[1], msg->data[2]);
     if (msg->data.size() < 3) return;
     hw_->send_cmd_motors(
-        msg->data[0],
         msg->data[1],
-        msg->data[2]);
+        msg->data[2],
+        msg->data[0]);
 }
 
 }  // namespace semubot
