@@ -41,22 +41,4 @@ def generate_launch_description():
             ],
             output='screen',
         ),
-
-        # Joystick node
-        Node(
-            package='joy',
-            executable='joy_node',
-            name='joy',
-            parameters=[{'device_id': 0}],
-            output='screen',
-        ),
-
-        # Teleop node
-        Node(
-            package='teleop_twist_joy',
-            executable='teleop_node',
-            name='teleop',
-            parameters=[joy_config_file],
-            output='screen',
-        ),
     ])
