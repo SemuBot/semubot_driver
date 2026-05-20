@@ -1,210 +1,139 @@
 # semubot_driver
 
-Low-level driver package for communicating with the Semubot STM32 wheelbase firmware.
+> Low-level serial driver for communicating with the SemuBot STM32 wheelbase firmware.
 
-This package is used for direct serial-based testing and for onboard-control variants where the STM32 receives robot velocity commands and handles motor control internally.
+![ROS 2](https://img.shields.io/badge/ROS%202-Jazzy-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-## Purpose
+---
 
-`semubot_driver` provides the host-side interface for the STM32 firmware.
+## Overview
 
-Typical responsibilities:
+`semubot_driver` provides the host-side interface to the STM32 firmware over serial. It handles sending velocity commands, reading wheelbase state, and serves as the serial backend for `ros2_control`-based stacks when needed.
 
-    send velocity commands to STM32
-    read wheelbase state from STM32
-    support direct serial testing
-    provide tools for open-loop and PID firmware experiments
+Use this package for:
+- Direct serial testing of firmware variants
+- Onboard-control variants where the STM32 handles mixing or PID internally
+- Serial backend for `ros2ctrl-serial`
 
-## Command convention
+For `ros2_control`-based stacks, see [`semubot_ros_control`](https://github.com/SemuBot/semubot_ros_control).
 
-Robot velocity command:
+---
 
-    vx = forward/backward
-    vy = left/right
-    wz = rotation/yaw
+## Serial Protocol
 
-For serial firmware variants, commands are sent as:
+### Host → STM32
 
-    CMD:vx,vy,wz
+```
+CMD:vx,vy,wz
+```
 
-Example:
+| Field | Meaning |
+|---|---|
+| `vx` | Forward / backward |
+| `vy` | Left / right (strafe) |
+| `wz` | Rotation / yaw |
 
-    CMD:0.20,0.00,0.00
+**Examples**
 
-This means:
+```
+CMD:0.20,0.00,0.00    # forward
+CMD:-0.20,0.00,0.00   # backward
+CMD:0.00,0.20,0.00    # left
+CMD:0.00,-0.20,0.00   # right
+CMD:0.00,0.00,0.20    # rotate
+CMD:0.00,0.00,0.00    # stop
+```
 
-    vx = 0.20
-    vy = 0.00
-    wz = 0.00
+### STM32 → Host
 
-## Serial protocol
+```
+STATE:p1,p2,p3,v1,v2,v3
+```
 
-### Command from host to STM32
+| Field | Meaning |
+|---|---|
+| `p1, p2, p3` | Wheel positions |
+| `v1, v2, v3` | Wheel velocities |
 
-    CMD:vx,vy,wz
+**Motor order**
 
-Example commands:
+| Index | Joint |
+|---|---|
+| M1 | `omni_ball_1_joint` |
+| M2 | `omni_ball_2_joint` |
+| M3 | `omni_ball_3_joint` |
 
-    CMD:0.20,0.00,0.00
-    CMD:-0.20,0.00,0.00
-    CMD:0.00,0.20,0.00
-    CMD:0.00,-0.20,0.00
-    CMD:0.00,0.00,0.20
+---
 
-### State from STM32 to host
+## Firmware Variants
 
-    STATE:p1,p2,p3,v1,v2,v3
+### `onboard-serial`
 
-Meaning:
+Host sends `CMD:vx,vy,wz`. STM32 applies the onboard open-loop mixer and drives motors directly. No PID.
 
-    p1, p2, p3 = wheel positions
-    v1, v2, v3 = wheel velocities
+### `onboard-serial-pid`
 
-Expected motor order:
+Host sends `CMD:vx,vy,wz`. STM32 computes wheel velocity targets, reads encoders, runs onboard PID, and drives motors. PID runs entirely on the STM32.
 
-    1 = M1 = omni_ball_1_joint
-    2 = M2 = omni_ball_2_joint
-    3 = M3 = omni_ball_3_joint
+### `ros2ctrl-serial`
 
-## Supported firmware variants
+The `semubot_ros_control` hardware interface sends low-level motor commands over serial. `semubot_driver` acts as the communication backend. PID runs on the ROS 2 side.
 
-### onboard-serial-openloop
+```
+/cmd_vel
+    → ros2_control controller
+    → SemuBotHardwareInterface
+    → semubot_driver
+    → STM32 → PWM
+```
 
-The host sends:
+---
 
-    CMD:vx,vy,wz
+## Usage
 
-The STM32 does:
+### Direct serial testing
 
-    parse command
-    apply onboard open-loop mixer
-    generate PWM duty
-    drive motors
+Open a serial terminal to the STM32 and send commands manually:
 
-PID is not used in this variant.
+```bash
+# Forward
+CMD:0.10,0.00,0.00
 
-### onboard-serial-pid
+# Expected response
+STATE:p1,p2,p3,v1,v2,v3
 
-The host sends:
+# Stop
+CMD:0.00,0.00,0.00
+```
 
-    CMD:vx,vy,wz
+### ros2_control mode
 
-The STM32 does:
+Run the driver node as the serial backend for the `ros2_control` stack:
 
-    parse command
-    compute wheel velocity targets
-    read encoders
-    run onboard PID
-    generate PWM duty
-    drive motors
+```bash
+ros2 run semubot_driver driver_node --ros-args \
+  -p mode:=ros2_control \
+  -p serial_port:=/dev/ttyACM0 \
+  -p baud_rate:=115200
+```
 
-PID is done on the STM32.
+In this mode the driver forwards low-level motor commands from the hardware interface to the STM32 and returns encoder state. The STM32 does not perform mixing or PID — that is handled by the ROS 2 controller.
 
-### ros2ctrl-serial
+> Do not use `mode:=ros2_control` for onboard PID testing. In that case the STM32 expects `CMD:vx,vy,wz` directly.
 
-In the ros2_control serial variant, the host-side ros2_control hardware interface sends low-level motor commands to the STM32.
+---
 
-In that architecture:
+## Related Packages
 
-    /cmd_vel
-    -> ros2_control controller
-    -> serial hardware interface
-    -> STM32
-    -> PWM duty
+| Package | Description |
+|---|---|
+| [`semubot_ros_control`](https://github.com/SemuBot/semubot_ros_control) | `ros2_control` hardware interface and velocity controller |
+| [`semubot_bringup`](https://github.com/SemuBot/semubot_bringup) | Top-level launch files |
+| [`SemuBot-Firmware`](https://github.com/SemuBot/SemuBot-Firmware) | STM32 firmware (FreeRTOS, micro-ROS) |
 
-PID may be done on the ROS side depending on the controller implementation.
+---
 
+## **License**
 
-## Direct serial testing
-
-Example using a serial terminal:
-
-    CMD:0.10,0.00,0.00
-
-Expected response format:
-
-    STATE:p1,p2,p3,v1,v2,v3
-
-Stop command:
-
-    CMD:0.00,0.00,0.00
-
-## Direction tests
-
-Forward:
-
-    CMD:0.20,0.00,0.00
-
-Backward:
-
-    CMD:-0.20,0.00,0.00
-
-Left:
-
-    CMD:0.00,0.20,0.00
-
-Right:
-
-    CMD:0.00,-0.20,0.00
-
-Rotate:
-
-    CMD:0.00,0.00,0.20
-
-## Relationship to semubot_ros_control
-
-`semubot_driver` is for low-level serial communication and direct firmware testing.
-
-`semubot_ros_control` is for ros2_control-based control using a hardware interface and controller.
-
-Use `semubot_driver` when testing:
-
-    onboard-serial-openloop
-    onboard-serial-pid
-    direct serial firmware behavior
-
-Use `semubot_ros_control` when testing:
-
-    ros2ctrl-serial
-    ros2ctrl-microros
-    ROS-side PID
-
-
-
-## ros2_control mode
-
-`semubot_driver` can be run in `ros2_control` mode:
-
-    ros2 run semubot_driver driver_node --ros-args -p mode:=ros2_control
-
-With serial settings:
-
-    ros2 run semubot_driver driver_node --ros-args -p mode:=ros2_control -p serial_port:=/dev/ttyACM0 -p baud_rate:=115200
-
-In this mode, the driver is used as the serial communication backend for the ros2_control stack.
-
-The command path is:
-
-    /cmd_vel
-    -> ros2_control controller
-    -> semubot_ros_control hardware interface
-    -> semubot_driver
-    -> STM32
-
-This is different from onboard serial control.
-
-In onboard serial control, the driver or host sends robot velocity commands directly to the STM32:
-
-    CMD:vx,vy,wz
-
-and the STM32 performs the motion mixing or PID onboard.
-
-In `ros2_control` mode, the ROS 2 controller handles the higher-level control. The driver’s job is mainly to communicate with the STM32, forward commands, and read state feedback.
-
-Use `mode:=ros2_control` when testing:
-
-    ros2ctrl-serial
-    ROS-side PID
-    ros2_control hardware interface integration
-
-Do not use `mode:=ros2_control` for standalone onboard PID testing, where the STM32 expects direct robot velocity commands.
+This project is licensed under the Apache 2.0 license - see the [LICENSE](LICENSE) file for more information.
