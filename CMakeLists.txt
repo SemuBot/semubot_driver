@@ -9,6 +9,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 
 include_directories(include)
 
@@ -20,13 +21,12 @@ add_executable(driver_node
   src/plugin_joint_state.cpp
 )
 
-ament_target_dependencies(driver_node
-  rclcpp
-  geometry_msgs
-  sensor_msgs
-  std_msgs
+target_link_libraries(driver_node PRIVATE
+  rclcpp::rclcpp
+  ${geometry_msgs_TARGETS}
+  ${sensor_msgs_TARGETS}
+  ${std_msgs_TARGETS}
 )
-
 install(TARGETS driver_node
   DESTINATION lib/${PROJECT_NAME}
 )
